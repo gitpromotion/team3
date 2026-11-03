@@ -11,11 +11,14 @@
         <relativePath/>
     </parent>
 
-    <groupId>com.example</groupId>
-    <artifactId>flight-web</artifactId>
-    <version>1.0.0</version>
-    <name>flight-web</name>
-    <description>국내선 항공 지연 예측 웹 (Spring Boot + H2 + Python 모델 API)</description>
+    
+	<groupId>com.example</groupId>
+	<artifactId>flight-web</artifactId>
+	<version>1.0.0</version>
+	<packaging>war</packaging>
+	<name>flight-web</name>
+	<description>국내선 항공 지연 예측 웹 (Spring Boot + postgresql + Python 모델 API)</description>
+
 
     <properties>
         <java.version>17</java.version>
@@ -36,15 +39,20 @@
             <artifactId>spring-boot-starter-jdbc</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.h2database</groupId>
-            <artifactId>h2</artifactId>
-            <scope>runtime</scope>
-        </dependency>
+    		<groupId>org.postgresql</groupId>
+    		<artifactId>postgresql</artifactId>
+    		<scope>runtime</scope>
+		</dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
+        <dependency>
+    		<groupId>org.springframework.boot</groupId>
+   	 		<artifactId>spring-boot-starter-tomcat</artifactId>
+    		<scope>provided</scope>
+		</dependency>
     </dependencies>
 
     <build>
