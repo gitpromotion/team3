@@ -1,0 +1,8 @@
+# Eclipse Workspace
+**/.metadata/
+
+# Eclipse 개인 설정
+**/.settings/
+
+# Maven 빌드 결과물
+**/target/
