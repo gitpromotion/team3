@@ -40,7 +40,8 @@ public class FlightController {
 
     /** 대시보드: 모델 성능, 항공사·공항별 실제 vs 예측, 날짜별 위험 Top 20 */
     @GetMapping("/")
-    public String dashboard(@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+    public String dashboard(@RequestParam(name = "date", required = false)
+                            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
                             Model model) {
         Map<String, Object> range = repo.dateRange();
         LocalDate maxDate = LocalDate.parse(String.valueOf(range.get("max_date")).substring(0, 10));
@@ -74,8 +75,9 @@ public class FlightController {
 
     /** 편명 검색 */
     @GetMapping("/search")
-    public String search(@RequestParam(required = false) String flightNo,
-                         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+    public String search(@RequestParam(name = "flightNo", required = false) String flightNo,
+                         @RequestParam(name = "date", required = false)
+                         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
                          Model model) {
         model.addAttribute("flightNo", flightNo);
         model.addAttribute("date", date);
