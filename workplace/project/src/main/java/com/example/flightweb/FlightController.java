@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
-@Controller
+@Controller // 수정사항 ( 테스트 )
 public class FlightController {
 
     static final Map<String, String> AIRLINES = new LinkedHashMap<>();
