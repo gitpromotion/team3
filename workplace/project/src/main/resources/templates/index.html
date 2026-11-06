@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>항공 지연 예측</title>
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+    <link rel="stylesheet" th:href="@{/style.css}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<header class="hero">
+    <div class="hero-inner">
+        <div class="brand">✈️ <span>FlightCast</span></div>
+        <h1>항공 지연 예측 대시보드</h1>
+        <p>날짜와 노선을 고르면 머신러닝 모델이 그날의 지연 가능성·예상 시간·원인을 예측합니다.</p>
+
+        <form method="get" action="/" class="search">
+            <div class="field">
+                <label>📅 날짜</label>
+                <input type="date" name="date" th:value="${date}" th:attr="min=${minDate},max=${maxDate}" required>
+            </div>
+            <div class="field">
+                <label>🛫 출발</label>
+                <select name="origin">
+                    <option value="">전체</option>
+                    <option th:each="o : ${origins}" th:value="${o}" th:text="${o}" th:selected="${o == origin}"></option>
+                </select>
+            </div>
+            <div class="field">
+                <label>🛬 도착</label>
+                <select name="dest">
+                    <option value="">전체</option>
+                    <option th:each="o : ${origins}" th:value="${o}" th:text="${o}" th:selected="${o == dest}"></option>
+                </select>
+            </div>
+            <button type="submit">예측 보기 →</button>
+        </form>
+     </div>
+</header>
+
+<main class="wrap">
+
+    <!-- ===== 날짜별 예측 결과 ===== -->
+    <div th:if="${results != null}">
+        <div th:if="${total == 0}" class="empty">
+            <div class="empty-emoji">🔍</div>
+            <p>해당 조건의 예측이 없어요.<br>날짜나 노선을 바꿔보세요.</p>
+        </div>
+
+        <div th:if="${total > 0}">
+            <h2 class="sec-title">📅 <span th:text="${date}"></span> 예측 결과</h2>
+            <section class="stats">
+                <div class="stat"><div class="stat-ico" style="background:#eef2ff;color:#4f5bd5">🗓️</div>
+                    <div><div class="stat-num" th:text="${total}">0</div><div class="stat-lb">총 운항편</div></div></div>
+                <div class="stat"><div class="stat-ico" style="background:#fdeaea;color:#e4504f">⚠️</div>
+                    <div><div class="stat-num" th:text="${delayed}">0</div><div class="stat-lb">지연 예상</div></div></div>
+                <div class="stat"><div class="stat-ico" style="background:#e7f6ee;color:#2e9e5b">✅</div>
+                    <div><div class="stat-num" th:text="${ontime}">0</div><div class="stat-lb">정시 예상</div></div></div>
+                <div class="stat"><div class="stat-ico" style="background:#fff3e0;color:#e8933a">📊</div>
+                    <div><div class="stat-num" th:text="${avgProbPct} + '%'">0%</div><div class="stat-lb">평균 지연확률</div></div></div>
+                <div class="stat"><div class="stat-ico" style="background:#eaf4fb;color:#2f80c8">⏱️</div>
+                    <div><div class="stat-num" th:text="${avgMin} + '분'">0분</div><div class="stat-lb">평균 예상지연</div></div></div>
+                <div class="stat"><div class="stat-ico" style="background:#f3edfb;color:#8a4fd5">🏷️</div>
+                    <div><div class="stat-num sm" th:text="${topCause}">-</div><div class="stat-lb">주요 사유</div></div></div>
+            </section>
+
+            <section class="charts">
+                <div class="card"><h3>⏰ 시간대별 평균 지연확률</h3><canvas id="hourChart" height="150"></canvas></div>
+                <div class="card"><h3>🧩 이 날짜 사유 분포</h3><canvas id="causeChart" height="150"></canvas></div>
+            </section>
+
+            <section class="card rank-card">
+                <h3>🔥 지연 위험 TOP 10</h3>
+                <ol class="rank">
+                    <li th:each="f,st : ${ranking}">
+                        <span class="medal" th:classappend="${st.index < 3 ? 'top' : ''}" th:text="${st.index + 1}">1</span>
+                        <span class="r-time" th:text="${#temporals.format(f.schedDep,'HH:mm')}"></span>
+                        <span class="r-air" th:text="${f.airlineCode}"></span>
+                        <span class="r-route">
+                            <span th:text="${f.originName != null ? f.originName : f.origin}"></span> →
+                            <span th:text="${f.destName != null ? f.destName : f.dest}"></span>
+                        </span>
+                        <span class="r-cause" th:text="${f.predCause}"></span>
+                        <span class="r-prob">
+                            <span class="mini-bar"><span class="mini-fill" th:style="'width:' + ${f.delayPercent()} + '%'"></span></span>
+                            <b th:text="${f.delayPercent()} + '%'"></b>
+                        </span>
+                    </li>
+                </ol>
+            </section>
+
+            <section class="card">
+                <h3>📋 전체 운항편 예측 <small th:text="'(' + ${total} + '편)'"></small></h3>
+                <table>
+                    <thead><tr><th>출발</th><th>항공사</th><th>노선</th><th>지연확률</th><th>예상지연</th><th>예상사유</th><th>판정</th></tr></thead>
+                    <tbody>
+                    <tr th:each="f : ${results}">
+                        <td class="t-time" th:text="${#temporals.format(f.schedDep,'HH:mm')}"></td>
+                        <td><span class="chip air" th:text="${f.airlineCode}"></span></td>
+                        <td><span th:text="${f.originName != null ? f.originName : f.origin}"></span>
+                            <span class="arrow">→</span>
+                            <span th:text="${f.destName != null ? f.destName : f.dest}"></span></td>
+                        <td><div class="bar"><div class="fill" th:style="'width:' + ${f.delayPercent()} + '%'"></div></div>
+                            <span class="pct" th:text="${f.delayPercent()} + '%'"></span></td>
+                        <td th:text="${f.expectedDelayMin != null ? (#numbers.formatDecimal(f.expectedDelayMin,1,0) + '분') : '-'}"></td>
+                        <td><span class="chip cause" th:text="${f.predCause}"></span></td>
+                        <td><span class="badge" th:classappend="${f.verdictClass()}" th:text="${f.verdict()}"></span></td>
+                    </tr>
+                    </tbody>
+                </table>
+            </section>
+
+            <hr class="divider">
+        </div>
+    </div>
+
+    <!-- ===== 전체 기간 통계 (항상 표시) ===== -->
+    <h2 class="sec-title">📈 전체 기간 통계 </h2>
+    <section class="charts">
+        <div class="card">
+            <h3>🏆 항공사별 평균 지연확률 순위</h3>
+            <canvas id="airlineChart" height="160"></canvas>
+        </div>
+        <div class="card">
+            <h3>🧩 전체 예상 사유 분포</h3>
+            <canvas id="causeDistChart" height="160"></canvas>
+        </div>
+    </section>
+
+    <section class="charts">
+        <!-- 항공사 순위 리스트 -->
+        <div class="card">
+            <h3>🥇 항공사 지연율 랭킹</h3>
+            <ol class="rank">
+                <li th:each="a,st : ${airlineRank}">
+                    <span class="medal" th:classappend="${st.index < 3 ? 'top' : ''}" th:text="${st.index + 1}">1</span>
+                    <span class="r-route" th:text="${a.airline_name}">항공사</span>
+                    <span class="r-cause" th:text="'평균 ' + ${a.avg_min} + '분'"></span>
+                    <span class="r-prob">
+                        <span class="mini-bar"><span class="mini-fill" th:style="'width:' + ${a.avg_prob} + '%'"></span></span>
+                        <b th:text="${a.avg_prob} + '%'"></b>
+                    </span>
+                </li>
+            </ol>
+        </div>
+        <!-- 노선 위험 TOP -->
+        <div class="card">
+            <h3>🛫 지연 위험 노선 TOP 10</h3>
+            <ol class="rank">
+                <li th:each="r,st : ${routeRank}">
+                    <span class="medal" th:classappend="${st.index < 3 ? 'top' : ''}" th:text="${st.index + 1}">1</span>
+                    <span class="r-route">
+                        <span th:text="${r.origin_name != null ? r.origin_name : r.origin}"></span> →
+                        <span th:text="${r.dest_name != null ? r.dest_name : r.dest}"></span>
+                    </span>
+                    <span class="r-prob">
+                        <span class="mini-bar"><span class="mini-fill" th:style="'width:' + ${r.avg_prob} + '%'"></span></span>
+                        <b th:text="${r.avg_prob} + '%'"></b>
+                    </span>
+                </li>
+            </ol>
+        </div>
+    </section>
+
+    <!-- 월별 지연 추세 -->
+    <section class="card">
+        <h3>📉 월별 지연 추세 <small>(2026-12 ~ 2028-12)</small></h3>
+        <canvas id="trendChart" height="90"></canvas>
+    </section>
+
+    <!-- 공항 × 시간대 히트맵 -->
+    <section class="card">
+        <h3>🔥 공항 × 시간대 지연 히트맵 <small>(색이 진할수록 지연확률 높음)</small></h3>
+        <div id="heatmap" class="heatmap-wrap"></div>
+    </section>
+</main>
+
+<footer class="foot">© 2026 FlightCast · 머신러닝 기반 항공 지연 예측 · 데이터 2026-12 ~ 2028-12</footer>
+
+<script th:inline="javascript">
+    const palette = ['#4f5bd5','#e4504f','#2e9e5b','#e8933a','#8a4fd5','#2f80c8','#c94f8a','#5bb7b0','#9aa4b2','#d7a93a'];
+    const vgrad = (ctx) => { const g = ctx.createLinearGradient(0,0,0,220); g.addColorStop(0,'#6a8cff'); g.addColorStop(1,'#e4504f'); return g; };
+    const hasChart = (typeof Chart !== 'undefined');
+    if (hasChart) {
+    // 날짜별 차트 (결과 있을 때만)
+    const hourLabels = /*[[${hourLabels}]]*/ [];
+    const hourValues = /*[[${hourValues}]]*/ [];
+    const causeLabels = /*[[${causeLabels}]]*/ [];
+    const causeValues = /*[[${causeValues}]]*/ [];
+    if (document.getElementById('hourChart') && hourLabels.length) {
+        new Chart(document.getElementById('hourChart'), {
+            type:'bar',
+            data:{ labels:hourLabels, datasets:[{ data:hourValues, backgroundColor:c=>vgrad(c.chart.ctx), borderRadius:6, maxBarThickness:26 }]},
+            options:{ plugins:{legend:{display:false}}, scales:{ y:{ beginAtZero:true, ticks:{callback:v=>v+'%'} } } }
+        });
+        new Chart(document.getElementById('causeChart'), {
+            type:'doughnut',
+            data:{ labels:causeLabels, datasets:[{ data:causeValues, backgroundColor:palette, borderWidth:2, borderColor:'#fff' }]},
+            options:{ plugins:{legend:{position:'right', labels:{boxWidth:12, font:{size:11}}}}, cutout:'58%' }
+        });
+    }
+
+    // 전체 기간 차트 (항상)
+    const airlineLabels = /*[[${airlineLabels}]]*/ [];
+    const airlineValues = /*[[${airlineValues}]]*/ [];
+    const causeDistLabels = /*[[${causeDistLabels}]]*/ [];
+    const causeDistValues = /*[[${causeDistValues}]]*/ [];
+    if (document.getElementById('airlineChart')) {
+        new Chart(document.getElementById('airlineChart'), {
+            type:'bar',
+            data:{ labels:airlineLabels, datasets:[{ data:airlineValues, backgroundColor:c=>vgrad(c.chart.ctx), borderRadius:6, maxBarThickness:28 }]},
+            options:{ indexAxis:'y', plugins:{legend:{display:false}}, scales:{ x:{ beginAtZero:true, ticks:{callback:v=>v+'%'} } } }
+        });
+        new Chart(document.getElementById('causeDistChart'), {
+            type:'doughnut',
+            data:{ labels:causeDistLabels, datasets:[{ data:causeDistValues, backgroundColor:palette, borderWidth:2, borderColor:'#fff' }]},
+            options:{ plugins:{legend:{position:'right', labels:{boxWidth:12, font:{size:11}}}}, cutout:'58%' }
+        });
+    }
+
+    // 월별 지연 추세 (라인)
+    const monthLabels = /*[[${monthLabels}]]*/ [];
+    const monthProb = /*[[${monthProb}]]*/ [];
+    const monthMin = /*[[${monthMin}]]*/ [];
+    if (document.getElementById('trendChart') && monthLabels.length) {
+        new Chart(document.getElementById('trendChart'), {
+            data:{ labels:monthLabels, datasets:[
+                { type:'line', label:'평균 지연확률(%)', data:monthProb, borderColor:'#e4504f', backgroundColor:'rgba(228,80,79,.12)',
+                  fill:true, tension:.35, pointRadius:2, yAxisID:'y' },
+                { type:'line', label:'평균 예상지연(분)', data:monthMin, borderColor:'#4f5bd5', backgroundColor:'transparent',
+                  borderDash:[5,4], tension:.35, pointRadius:2, yAxisID:'y1' }
+            ]},
+            options:{ interaction:{mode:'index',intersect:false},
+                plugins:{legend:{position:'top', labels:{boxWidth:14,font:{size:11}}}},
+                scales:{ y:{position:'left',ticks:{callback:v=>v+'%'}}, y1:{position:'right',grid:{drawOnChartArea:false},ticks:{callback:v=>v+'분'}} } }
+        });
+    }
+    } // end if(hasChart)
+
+    // 공항 × 시간대 히트맵 (격자 직접 렌더 — Chart.js 없어도 동작)
+    const heatRows = /*[[${heatRows}]]*/ [];
+    (function(){
+        const box = document.getElementById('heatmap');
+        if (!box || !heatRows.length) return;
+        const origins = [...new Set(heatRows.map(r=>r.origin))].sort();
+        const hours = [...new Set(heatRows.map(r=>Number(r.hr)))].sort((a,b)=>a-b);
+        const map = {}; let max = 0;
+        heatRows.forEach(r=>{ map[r.origin+'_'+r.hr]=Number(r.v); if(Number(r.v)>max) max=Number(r.v); });
+        const color = v => { if(v==null) return '#f1f4f9';
+            const t=Math.min(v/(max||1),1); // 0~1
+            const r=Math.round(110+145*t), g=Math.round(150-110*t), b=Math.round(230-150*t);
+            return `rgb(${r},${g},${b})`; };
+        let html = '<table class="heat"><thead><tr><th>공항</th>';
+        hours.forEach(h=> html += `<th>${String(h).padStart(2,'0')}</th>`);
+        html += '</tr></thead><tbody>';
+        origins.forEach(o=>{
+            html += `<tr><td class="ho">${o}</td>`;
+            hours.forEach(h=>{ const v=map[o+'_'+h];
+                html += `<td class="hc" style="background:${color(v)}" title="${o} ${h}시 · ${v??'-'}%">${v!=null?v:''}</td>`; });
+            html += '</tr>';
+        });
+        html += '</tbody></table>';
+        box.innerHTML = html;
+    })();
+</script>
+</body>
+</html>
