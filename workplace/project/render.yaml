@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: flight-forecast-web
+    runtime: docker
+    region: singapore
+    plan: free
+    envVars:
+      - key: DB_URL
+        sync: false   # 대시보드에서 직접 입력 (jdbc:postgresql://<neon호스트>/neondb?sslmode=require)
+      - key: DB_USERNAME
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
